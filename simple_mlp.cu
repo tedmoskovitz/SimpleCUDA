@@ -3,6 +3,8 @@
 #include <cuda_runtime.h>
 #include <random>
 #include <iomanip> // for std::setw
+#include <cstdlib> // for std::atoi and std::atof
+
 
 void printResults(const std::vector<std::vector<float>>& inputs, const std::vector<float>& correct_outputs, const std::vector<float>& model_outputs) {
     int colWidth = 20;
@@ -48,7 +50,11 @@ std::vector<float> initWeights(int rows, int cols) {
     std::vector<float> weights_flat(rows * cols);
     std::random_device rd;
     std::mt19937 gen(rd());
-    std::normal_distribution<> d(0, 0.4);
+
+    // Xavier initialization
+    float variance = 1.0 / static_cast<float>(rows);
+    float stddev = std::sqrt(variance);
+    std::normal_distribution<float> d(0, stddev);
 
     // Initialize weights in flat array
     for (int i = 0; i < rows * cols; ++i) {
@@ -57,6 +63,7 @@ std::vector<float> initWeights(int rows, int cols) {
 
     return weights_flat;
 }
+
 
 // CUDA kernel for matrix addition (for bias)
 __global__ void matAdd(float* A, float* B, float* C, int N, int M) {
@@ -121,7 +128,7 @@ void forwardNet(float* gpu_inputData, float* gpu_outputLayerData, float* gpu_hid
 __global__ void crossEntropyLoss(float* predictions, float* labels, float* loss, int N) {
     int idx = blockIdx.x * blockDim.x + threadIdx.x;
     if(idx < N) {
-        loss[idx] = -labels[idx] * logf(predictions[idx]) - (1 - labels[idx]) * logf(1 - predictions[idx]);
+        loss[idx] = -labels[idx] * logf(predictions[idx] + 1e-5) - (1 - labels[idx]) * logf(1 - predictions[idx] + 1e-5);
     }
 }
 
@@ -209,21 +216,27 @@ float computeLoss(std::vector<float>& trueValues, std::vector<float>& predictedV
     for (size_t i = 0; i < trueValues.size(); ++i) {
         float y = trueValues[i];
         float p = predictedValues[i];
-        loss -= y * std::log(p) + (1 - y) * std::log(1 - p);
+        loss -= y * std::log(p + 1e-5) + (1 - y) * std::log(1 - p + 1e-5);
     }
     return loss / trueValues.size();
 }
 
 
 
-int main() {
+int main(int argc, char *argv[]) {
+    // Check if enough arguments are provided
+    if (argc < 4) {
+        std::cerr << "Usage: " << argv[0] << " [learningRate] [hiddenNodes] [num_batches]\n";
+        return 1;
+    }
     // Initialize architecture, weights, and biases
     int input_nodes = 2;
-    int hidden_nodes = 4;
     int output_nodes = 1;
     int num_samples = 4;
-    // Learning rate
-    float learningRate = 0.03;
+    // Convert command line arguments to variables
+    float learningRate = std::stof(argv[1]); // Convert string to float
+    int hidden_nodes = std::stoi(argv[2]);   // Convert string to integer
+    int num_batches = std::stoi(argv[3]);  // convert string to integer
 
     // Initialize weights & biases
     auto W1 = initWeights(input_nodes, hidden_nodes);
@@ -255,7 +268,6 @@ int main() {
     cudaMalloc((void**)&gpu_hiddenLayerData, sizeof(float) * num_samples * hidden_nodes);
     cudaMalloc((void**)&gpu_outputLayerData, sizeof(float) * num_samples * output_nodes);
 
-    int num_batches = 10000; // Or however many batches you want to run
     int totalOutputElements = num_samples * output_nodes;
     std::vector<float> correct_outputs = {0, 0, 1, 1}; // Ground truth
 
