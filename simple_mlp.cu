@@ -298,17 +298,6 @@ int main(int argc, char *argv[]) {
         }
     }
 
-
-    // // Forward pass
-    // int totalOutputElements = num_samples * output_nodes;
-    // forwardNet(gpu_inputData, gpu_outputLayerData, gpu_hiddenLayerData,
-    //        gpu_W1, gpu_B1, gpu_W2, gpu_B2,
-    //        num_samples, input_nodes, hidden_nodes, output_nodes);
-
-    // backwardNet(gpu_outputLayerData, gpu_outputData, gpu_hiddenLayerData,
-    //        gpu_W1, gpu_W2, gpu_B1, gpu_B2,
-    //        num_samples, input_nodes, hidden_nodes, output_nodes, learningRate);
-
     // Download and check output
     float outputLayerData[4];  // Adjust size accordingly
     cudaMemcpy(outputLayerData, gpu_outputLayerData, sizeof(float) * totalOutputElements, cudaMemcpyDeviceToHost);
